@@ -10,7 +10,6 @@
 #include <queue>
 #include <cmath>
 #include <limits>
-
 #include <omp.h>
 #include "crs.hpp"
 
@@ -69,41 +68,42 @@ static void spmv(const CRS& A, const vector<double>& x, vector<double>& y)
     #endif
 }
 
-// 疎行列ベクトル積
-// y = A*x
-// static void spmv(const CRS& A, const vector<double>& x, vector<double>& y) {
-//     int n = A.n;
-//     y.assign(n, 0.0);
-//     for (int i = 0; i < n; ++i) {
-//         double sum = 0.0;
-//         for (int k = A.rowptr[i]; k < A.rowptr[i+1]; ++k) {
-//             sum += A.val[k] * x[A.colind[k]];
-//         }
-//         y[i] = sum;
-//     }
-// }
-
+#ifdef JAC
 // Jacobi preconditioner: z = M^{-1} r with M = diag(A)
-struct Jacobi {
-    vector<double> inv_diag;
-    explicit Jacobi(const CRS& A) {
+struct Jacobi
+{
+    vector<double> inv_diag;  // 逆対角成分
+
+    explicit Jacobi(const CRS& A)
+    {
         inv_diag.assign(A.n, 1.0);
-        for (int i = 0; i < A.n; ++i) {
+        for (int i = 0; i < A.n; ++i)
+        {
             double d = 0.0;
-            for (int k = A.rowptr[i]; k < A.rowptr[i+1]; ++k) {
-                if (A.colind[k] == i) { d = A.val[k]; break; }
+            for (int k = A.rowptr[i]; k < A.rowptr[i+1]; ++k)
+            {
+                if (A.colind[k] == i)
+                {
+                    d = A.val[k];
+                    break;
+                }
             }
             // 念のための保護（ゼロ対角はCGの前提を満たさない）
             inv_diag[i] = (fabs(d) > 0.0) ? 1.0 / d : 1.0;
         }
     }
-    void apply(const vector<double>& r, vector<double>& z) const {
+
+    void apply(const vector<double>& r, vector<double>& z) const
+    {
         z.resize(r.size());
-        for (size_t i = 0; i < r.size(); ++i) z[i] = inv_diag[i] * r[i];
+        for (size_t i = 0; i < r.size(); ++i)
+            z[i] = inv_diag[i] * r[i];
     }
 };
+#endif
 
-struct CGResult {
+struct CGResult
+{
     int iters = 0;
     double rel_resid = NAN;
     bool converged = false;
@@ -115,9 +115,8 @@ CGResult conjugate_gradient(
     const vector<double>& b,
     vector<double>& x,           // in: initial guess, out: solution
     int max_iter = 1000,
-    double tol = 1e-8,
-    bool use_jacobi = true
-) {
+    double tol = 1e-8)
+{
     const int n = A.n;
     vector<double> r(n), p(n), Ap(n), z(n);
 
@@ -133,9 +132,12 @@ CGResult conjugate_gradient(
     if (normb == 0.0)
         normb = 1.0; // b=0 でも動くように
 
+    #ifdef JAC
     Jacobi M(A);
-    if (use_jacobi)
-        M.apply(r, z); else z = r;
+    M.apply(r, z);
+    #else
+    z = r;
+    #endif
 
     // p0 = z0
     p = z;
@@ -180,11 +182,11 @@ CGResult conjugate_gradient(
             return res;
         }
 
-        // 前処理
-        if (use_jacobi)
-            M.apply(r, z);
-        else
-            z = r;
+        #ifdef JAC
+        M.apply(r, z);
+        #else
+        z = r;
+        #endif
 
         double rsnew = dot(r, z);
         double beta = rsnew / rsold;
@@ -219,21 +221,20 @@ int main(int argc, char** argv) {
     vector<double> x(A.n, 0.0);  // 解ベクトル
     vector<double> b(A.n, 1.0);  // RHSベクトル（すべて 1）
 
-    bool use_jacobi = true;
-    
     double t0 = omp_get_wtime();
-    auto out = conjugate_gradient(A, b, x, max_iter, tol, /*Jacobi*/use_jacobi);
+    auto out = conjugate_gradient(A, b, x, max_iter, tol);
     double t1 = omp_get_wtime();
 
-    if (use_jacobi)
+    #ifdef JAC
         cout << "CG with Jacobi preconditioner: \n";
-    else
+    #else
         cout << "CG without preconditioner: \n";
+    #endif
 
     cout << "cg_time [ms]=" << (t1 - t0) * 1000.0
          << ", converged=" << out.converged
          << ", iters=" << out.iters
-         << ", rel_resid=" << out.rel_resid << "\n";
+         << ", rel_resid=" << out.rel_resid;
 
     // 仕上げの残差チェック
     vector<double> Ax;
@@ -243,7 +244,7 @@ int main(int argc, char** argv) {
         double d = Ax[i]-b[i];
         nr += d*d; nb += b[i]*b[i];
     }
-    cout << "final rel ||Ax-b||/||b|| = " << sqrt(nr)/sqrt(nb) << "\n";
+    cout << ", ||Ax-b||/||b|| = " << sqrt(nr)/sqrt(nb) << "\n";
 
     return 0;
 }

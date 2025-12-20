@@ -1,4 +1,3 @@
-#include "crs.hpp"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -9,6 +8,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "crs.hpp"
 
 // ---- 内部ユーティリティ ----
 static std::string to_lower(std::string s) {

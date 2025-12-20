@@ -8,17 +8,19 @@ CXXFLAGS = -Xpreprocessor -fopenmp -I$(INC_DIRS)
 
 HDRS := crs.hpp
 SRCS := crs_io.cpp cg.cpp
-OBJS := $(SRCS:.cpp=.o)
 
-TARGET = cg
+TARGET = cg dcg
 
 all: $(TARGET)
 
 clean:
 	rm -f $(TARGET) *.o
 
-$(TARGET): $(OBJS) $(HDRS)
-	$(CXX) $(CXXFLAGS) $(OBJS) -L$(LIB_DIRS) $(LIBS) -o $@
+cg: $(SRCS) $(HDRS)
+	$(CXX) $(CXXFLAGS) $(SRCS) -L$(LIB_DIRS) $(LIBS) -o $@
+
+dcg: $(SRCS) $(HDRS)
+	$(CXX) $(CXXFLAGS) -DJAC $(SRCS) -L$(LIB_DIRS) $(LIBS) -o $@
 
 .cpp.o :
 	$(CXX) $(CXXFLAGS) -c $<
