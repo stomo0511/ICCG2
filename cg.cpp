@@ -16,19 +16,72 @@
 
 using namespace std;
 
+// 内積
+static inline double dot(const vector<double>& a, const vector<double>& b)
+{
+    long double s = 0.0L;
+    const size_t n = a.size();
+    #pragma omp parallel for reduction(+:s) schedule(static)
+    for (size_t i = 0; i < n; ++i)
+        s += (long double)a[i] * b[i];
+    return (double)s;
+}
+
+// 2ノルム
+static inline double nrm2(const vector<double>& a)
+{
+    long double s = 0.0L;
+    const size_t n = a.size();
+    #pragma omp parallel for reduction(+:s) schedule(static)
+    for (size_t i = 0; i < n; ++i)
+        s += (long double)a[i] * a[i];
+    return (double)sqrt((double)s);
+}
+
 // 疎行列ベクトル積
 // y = A*x
-static void spmv(const CRS& A, const vector<double>& x, vector<double>& y) {
+static void spmv(const CRS& A, const vector<double>& x, vector<double>& y)
+{
     int n = A.n;
-    y.assign(n, 0.0);
-    for (int i = 0; i < n; ++i) {
+    // y.assign(n, 0.0);
+    if ((int)y.size() != n) y.resize(n);  // 再割当て/ゼロ埋めを避ける
+
+    #ifdef USEMKL
+    const double alpha = 1.0, beta = 0.0;
+    mkl_sparse_d_mv(SPARSE_OPERATION_NON_TRANSPOSE, alpha, A.handle, A.descr, x.data(), beta, y.data());
+    #else
+    const int*    rowptr = A.rowptr.data();
+    const int*    colind = A.colind.data();
+    const double* aval   = A.val.data();
+    const double* xp     = x.data();
+    double*       yp     = y.data();
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n; ++i)
+    {
         double sum = 0.0;
-        for (int k = A.rowptr[i]; k < A.rowptr[i+1]; ++k) {
-            sum += A.val[k] * x[A.colind[k]];
-        }
-        y[i] = sum;
+        const int rs = rowptr[i];
+        const int re = rowptr[i+1];
+        for (int k = rs; k < re; ++k)
+            sum += aval[k] * xp[colind[k]];
+
+        yp[i] = sum;
     }
+    #endif
 }
+
+// 疎行列ベクトル積
+// y = A*x
+// static void spmv(const CRS& A, const vector<double>& x, vector<double>& y) {
+//     int n = A.n;
+//     y.assign(n, 0.0);
+//     for (int i = 0; i < n; ++i) {
+//         double sum = 0.0;
+//         for (int k = A.rowptr[i]; k < A.rowptr[i+1]; ++k) {
+//             sum += A.val[k] * x[A.colind[k]];
+//         }
+//         y[i] = sum;
+//     }
+// }
 
 // Jacobi preconditioner: z = M^{-1} r with M = diag(A)
 struct Jacobi {
@@ -149,41 +202,48 @@ CGResult conjugate_gradient(
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " matrix.mtx [tol=1e-10] [max_iter=10000]\n";
+        cerr << "Usage: " << argv[0] << " matrix.mtx [tol=1e-10] [max_iter=10000]\n";
         return 1;
     }
-    std::string path = argv[1];
-    double tol = (argc >= 3) ? std::atof(argv[2]) : 1e-10;    // 収束判定
-    int max_iter = (argc >= 4) ? std::atoi(argv[3]) : 10000;  // 最大反復回数
+    string path = argv[1];
+    double tol = (argc >= 3) ? atof(argv[2]) : 1e-10;    // 収束判定
+    int max_iter = (argc >= 4) ? atoi(argv[3]) : 10000;  // 最大反復回数
 
     // 行列データの読み込み
     CRS A = read_mm2crs(path);
 
     if (A.n <= 0) {
-        std::cerr << "Invalid matrix size.\n"; return 1;
+        cerr << "Invalid matrix size.\n"; return 1;
     }
 
-    std::vector<double> x(A.n, 0.0);  // 解ベクトル
-    std::vector<double> b(A.n, 1.0);  // RHSベクトル（すべて 1）
+    vector<double> x(A.n, 0.0);  // 解ベクトル
+    vector<double> b(A.n, 1.0);  // RHSベクトル（すべて 1）
 
+    bool use_jacobi = true;
+    
     double t0 = omp_get_wtime();
-    auto out = conjugate_gradient(A, b, x, max_iter, tol, /*Jacobi*/true);
+    auto out = conjugate_gradient(A, b, x, max_iter, tol, /*Jacobi*/use_jacobi);
     double t1 = omp_get_wtime();
 
-    std::cout << "cg_time [ms]=" << (t1 - t0) * 1000.0
-              << ", converged=" << out.converged
-              << ", iters=" << out.iters
-              << ", rel_resid=" << out.rel_resid << "\n";
+    if (use_jacobi)
+        cout << "CG with Jacobi preconditioner: \n";
+    else
+        cout << "CG without preconditioner: \n";
+
+    cout << "cg_time [ms]=" << (t1 - t0) * 1000.0
+         << ", converged=" << out.converged
+         << ", iters=" << out.iters
+         << ", rel_resid=" << out.rel_resid << "\n";
 
     // 仕上げの残差チェック
-    std::vector<double> Ax;
+    vector<double> Ax;
     spmv(A, x, Ax);
     double nr=0.0, nb=0.0;
     for (int i = 0; i < A.n; ++i) {
         double d = Ax[i]-b[i];
         nr += d*d; nb += b[i]*b[i];
     }
-    std::cout << "final rel ||Ax-b||/||b|| = " << std::sqrt(nr)/std::sqrt(nb) << "\n";
+    cout << "final rel ||Ax-b||/||b|| = " << sqrt(nr)/sqrt(nb) << "\n";
 
     return 0;
 }
