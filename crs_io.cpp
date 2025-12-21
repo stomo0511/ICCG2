@@ -1,14 +1,13 @@
-#include <algorithm>
-#include <cctype>
-#include <fstream>
-#include <iostream>
-#include <numeric>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
+//
+// ファイル読み込み
+//
 
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <numeric>
+#include <string>
 #include "crs.hpp"
 
 // ---- 内部ユーティリティ ----

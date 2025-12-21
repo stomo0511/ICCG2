@@ -3,13 +3,8 @@
 //
 #include <iostream>
 #include <vector>
-#include <algorithm>
 #include <numeric>
-#include <map>
-#include <set>
-#include <queue>
 #include <cmath>
-#include <limits>
 #include <omp.h>
 #include "crs.hpp"
 
@@ -45,10 +40,10 @@ static void spmv(const CRS& A, const vector<double>& x, vector<double>& y)
     // y.assign(n, 0.0);
     if ((int)y.size() != n) y.resize(n);  // 再割当て/ゼロ埋めを避ける
 
-    #ifdef USEMKL
+#ifdef USEMKL
     const double alpha = 1.0, beta = 0.0;
     mkl_sparse_d_mv(SPARSE_OPERATION_NON_TRANSPOSE, alpha, A.handle, A.descr, x.data(), beta, y.data());
-    #else
+#else
     const int*    rowptr = A.rowptr.data();
     const int*    colind = A.colind.data();
     const double* aval   = A.val.data();
@@ -65,7 +60,7 @@ static void spmv(const CRS& A, const vector<double>& x, vector<double>& y)
 
         yp[i] = sum;
     }
-    #endif
+#endif
 }
 
 #ifdef JAC
@@ -114,7 +109,7 @@ CGResult conjugate_gradient(
     const CRS& A,
     const vector<double>& b,
     vector<double>& x,           // in: initial guess, out: solution
-    int max_iter = 1000,
+    int max_iter = 10000,
     double tol = 1e-8)
 {
     const int n = A.n;
@@ -204,12 +199,12 @@ CGResult conjugate_gradient(
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " matrix.mtx [tol=1e-10] [max_iter=10000]\n";
+        cerr << "Usage: " << argv[0] << " matrix.mtx [max_iter=10000] [tol=1e-08]\n";
         return 1;
     }
     string path = argv[1];
-    double tol = (argc >= 3) ? atof(argv[2]) : 1e-10;    // 収束判定
-    int max_iter = (argc >= 4) ? atoi(argv[3]) : 10000;  // 最大反復回数
+    int max_iter = (argc >= 3) ? atoi(argv[2]) : 10000;  // 最大反復回数
+    double tol = (argc >= 4) ? atof(argv[3]) : 1e-08;    // 収束判定
 
     // 行列データの読み込み
     CRS A = read_mm2crs(path);
