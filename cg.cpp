@@ -117,6 +117,8 @@ CGResult conjugate_gradient(
 
     // r0 = b - A x0
     spmv(A, x, r);
+
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; ++i)
         r[i] = b[i] - r[i];
 
@@ -147,30 +149,31 @@ CGResult conjugate_gradient(
     double rsold = dot(r, z);
 
     CGResult res;
+
+    // Main loop
     for (int k = 0; k < max_iter; ++k) {
         spmv(A, p, Ap);
         double pAp = dot(p, Ap);
         // SPD なら pAp > 0 のはず（数値誤差で 0 に近いと破綻）
-        if (fabs(pAp) < 1e-30) {
-            res.iters = k; break;
+        if (fabs(pAp) < 1e-30)
+        {
+            res.iters = k;
+            break;
         }
 
         double alpha = rsold / pAp;
 
-        // x_{k+1} = x_k + alpha p_k
+        #pragma omp parallel for schedule(static)
         for (int i = 0; i < n; ++i)
+        {
             x[i] += alpha * p[i];
-        // r_{k+1} = r_k - alpha A p_k
-        for (int i = 0; i < n; ++i)
             r[i] -= alpha * Ap[i];
+        }
 
         // 収束判定
-        double nr = 0.0;
-        for (int i = 0; i < n; ++i)
-            nr += r[i]*r[i];
-        nr = sqrt(nr);
-        double rel = nr / normb;
-        if (rel < tol) {
+        double rel = nrm2(r) / normb;
+        if (rel < tol)
+        {
             res.iters = k+1;
             res.rel_resid = rel;
             res.converged = true;
@@ -186,7 +189,7 @@ CGResult conjugate_gradient(
         double rsnew = dot(r, z);
         double beta = rsnew / rsold;
 
-        // p_{k+1} = z_{k+1} + beta p_k
+        #pragma omp parallel for schedule(static)
         for (int i = 0; i < n; ++i)
             p[i] = z[i] + beta * p[i];
 
