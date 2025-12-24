@@ -1,5 +1,4 @@
-#ifndef CRS_HPP_
-#define CRS_HPP_
+#pragma once
 
 #include <vector>
 #include <string>
@@ -13,5 +12,3 @@ struct CRS {
 
 // Matrix Market (*.mtx) を読み込んで CRS を返す（general/symmetric, real/integer/pattern）
 CRS read_mm2crs(const std::string& filepath);
-
-#endif // CRS_HPP_
