@@ -1,16 +1,18 @@
 #pragma once
 
-#include <iostream>
 #include <vector>
-#include "color.hpp"
+#include <cmath>
+#include <string>
+#include "crs.hpp"
 
-// 前処理なし
+// 前処理なし b: z = r
 struct Identity
 {
-    Identity() {}
+    // Identity() {}
     explicit Identity(const CRS&) {}
 
-    void apply(const std::vector<double>& r, std::vector<double>& z, const ColorSchedule* /*sched*/) const {
+    void apply(const std::vector<double>& r, std::vector<double>& z) const
+    {
         z = r;
     }
 
@@ -37,11 +39,11 @@ struct Jacobi
                 }
             }
             // 念のための保護（ゼロ対角はCGの前提を満たさない）
-            inv_diag[i] = (fabs(d) > 0.0) ? 1.0 / d : 1.0;
+            inv_diag[i] = (std::fabs(d) > 0.0) ? 1.0 / d : 1.0;
         }
     }
 
-    void apply(const std::vector<double>& r, std::vector<double>& z, const ColorSchedule* /*sched*/) const
+    void apply(const std::vector<double>& r, std::vector<double>& z) const
     {
         z.resize(r.size());
         for (size_t i = 0; i < r.size(); ++i)

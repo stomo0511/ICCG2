@@ -8,6 +8,8 @@
 #include <vector>
 #include <numeric>
 #include <string>
+#include <algorithm>
+#include <cctype>
 #include "crs.hpp"
 
 // ---- 内部ユーティリティ ----
@@ -154,6 +156,10 @@ CRS read_mm2crs(const std::string& filepath) {
         push_entry(i, j, vv);
         if (symmetry == "symmetric" && i != j) push_entry(j, i, vv);
     }
+
+    // 正方行列でなければエラー
+    if (nrows != ncols)
+        throw std::runtime_error("CG requires a square matrix (nrows == ncols).");
 
     return coo_to_crs(nrows, ncols, I, J, V);
 }

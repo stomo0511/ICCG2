@@ -6,7 +6,7 @@ LIBS = -lomp
 CXX = c++
 CXXFLAGS = -Xpreprocessor -fopenmp -march=native -std=c++17
 
-HDRS := crs.hpp
+HDRS := crs.hpp precond.hpp
 SRCS := crs_io.cpp cg.cpp
 
 TARGET = cg dcg
