@@ -9,6 +9,10 @@
 #include "crs.hpp"
 #include "precond.hpp"
 
+#ifdef ICP
+#include "ic0.hpp"
+#endif
+
 using namespace std;
 
 // 内積
@@ -41,10 +45,10 @@ static void spmv(const CRS& A, const vector<double>& x, vector<double>& y)
     // y.assign(n, 0.0);
     if ((int)y.size() != n) y.resize(n);  // 再割当て/ゼロ埋めを避ける
 
-#ifdef USEMKL
+    #ifdef USEMKL
     const double alpha = 1.0, beta = 0.0;
     mkl_sparse_d_mv(SPARSE_OPERATION_NON_TRANSPOSE, alpha, A.handle, A.descr, x.data(), beta, y.data());
-#else
+    #else
     const int*    rowptr = A.rowptr.data();
     const int*    colind = A.colind.data();
     const double* aval   = A.val.data();
@@ -61,42 +65,8 @@ static void spmv(const CRS& A, const vector<double>& x, vector<double>& y)
 
         yp[i] = sum;
     }
-#endif
+    #endif
 }
-
-// #ifdef JAC
-// // Jacobi preconditioner: z = M^{-1} r with M = diag(A)
-// struct Jacobi
-// {
-//     vector<double> inv_diag;  // 逆対角成分
-
-//     explicit Jacobi(const CRS& A)
-//     {
-//         inv_diag.assign(A.n, 1.0);
-//         for (int i = 0; i < A.n; ++i)
-//         {
-//             double d = 0.0;
-//             for (int k = A.rowptr[i]; k < A.rowptr[i+1]; ++k)
-//             {
-//                 if (A.colind[k] == i)
-//                 {
-//                     d = A.val[k];
-//                     break;
-//                 }
-//             }
-//             // 念のための保護（ゼロ対角はCGの前提を満たさない）
-//             inv_diag[i] = (fabs(d) > 0.0) ? 1.0 / d : 1.0;
-//         }
-//     }
-
-//     void apply(const vector<double>& r, vector<double>& z) const
-//     {
-//         z.resize(r.size());
-//         for (size_t i = 0; i < r.size(); ++i)
-//             z[i] = inv_diag[i] * r[i];
-//     }
-// };
-// #endif
 
 struct CGResult
 {
@@ -207,7 +177,9 @@ int main(int argc, char** argv) {
     ///////////////////////////////////////////////////////////////
     double t0 = omp_get_wtime(); // timer start
 
-    #ifdef JAC
+    #ifdef ICP
+        IC0 M(A);
+    #elif defined(JAC)
         Jacobi M(A);
     #else
         Identity M(A);
