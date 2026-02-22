@@ -11,7 +11,7 @@
 ## iccg
 不完全コレスキー分解前処理付きCG
 
-## 並列前進・後退代入
+## 並列（MC）前処理付き前進・後退代入
 ``` C++
 Input:
   L      : lower triangular matrix (IC(0))
